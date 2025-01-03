@@ -11,7 +11,7 @@ def get_dir_structure(root_dir, max_depth=float('inf'), ignore_patterns=None):
     :return: Dictionary representing directory structure
     """
     if ignore_patterns is None:
-        ignore_patterns = ['.git', '__pycache__', '.DS_Store']
+        ignore_patterns = ['.git', '__pycache__', '.DS_Store', '.idea', '.vscode']
     
     def _should_ignore(path):
         return any(pattern in path for pattern in ignore_patterns)
@@ -38,14 +38,20 @@ def get_dir_structure(root_dir, max_depth=float('inf'), ignore_patterns=None):
                 else:
                     # If it's a file, try to read its contents
                     try:
-                        with open(full_path, 'r', encoding='utf-8') as f:
-                            structure[item] = f.read()
+                        with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            file_content = f.read()
+                            # Truncate very long files
+                            if len(file_content) > 1000:
+                                file_content = file_content[:1000] + "\n... [File truncated]"
+                            structure[item] = file_content
                     except (UnicodeDecodeError, PermissionError):
                         # For binary or unreadable files, just store the path
-                        structure[item] = "[Unreadable file]"
+                        structure[item] = f"[Unreadable file: {full_path}]"
         
         except PermissionError:
             structure = "[Permission denied]"
+        except Exception as e:
+            structure = f"[Error exploring directory: {str(e)}]"
         
         return structure
 
@@ -75,30 +81,49 @@ def print_structure(structure, indent=''):
                 print(f"{indent}    ... (truncated)")
 
 def main():
-    # Check if directory path is provided
-    if len(sys.argv) < 2:
-        print("Please provide a directory path.")
-        print("Usage: python directory_explorer.py /path/to/directory")
-        sys.exit(1)
-    
-    # Get directory path from command line argument
-    directory = sys.argv[1]
-    
-    # Validate directory
-    if not os.path.isdir(directory):
-        print(f"Error: {directory} is not a valid directory.")
-        sys.exit(1)
-    
-    # Get absolute path
-    directory = os.path.abspath(directory)
-    
-    print(f"Exploring directory: {directory}\n")
-    print("Directory Structure and Contents:")
-    print("-" * 40)
-    
-    # Get and print directory structure
-    structure = get_dir_structure(directory)
-    print_structure(structure)
+    # Prompt for directory input
+    while True:
+        try:
+            # Prompt with clear instructions
+            directory = input("\n🗂️  Drag and drop a directory here, or enter the full path: ").strip()
+            
+            # Handle quotes around path (common when drag-dropping)
+            directory = directory.strip("'\"")
+            
+            # Validate directory
+            if not directory:
+                print("No directory provided. Press Ctrl+C to exit.")
+                continue
+            
+            # Expand ~ to full home directory path
+            directory = os.path.expanduser(directory)
+            
+            # Check if it's a valid directory
+            if not os.path.isdir(directory):
+                print(f"Error: {directory} is not a valid directory. Try again.")
+                continue
+            
+            # Get absolute path
+            directory = os.path.abspath(directory)
+            
+            print(f"\n📂 Exploring directory: {directory}\n")
+            print("Directory Structure and Contents:")
+            print("-" * 40)
+            
+            # Get and print directory structure
+            structure = get_dir_structure(directory)
+            print_structure(structure)
+            
+            # Ask if user wants to explore another directory
+            another = input("\nExplore another directory? (y/n): ").lower().strip()
+            if another != 'y':
+                break
+        
+        except KeyboardInterrupt:
+            print("\n\n👋 Exiting Directory Explorer. Goodbye!")
+            break
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
     main()
